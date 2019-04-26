@@ -6,7 +6,7 @@ Adapted for CS 182/282A Spring 2019 by Daniel Seita
 """
 import numpy as np
 import tensorflow as tf
-from tensorflow_probability import distributions as tfd
+from tensorflow import distributions as tfd
 import gym
 import logz
 import os
@@ -54,6 +54,7 @@ def setup_logger(logdir, locals_):
 
 
 class Agent(object):
+
     def __init__(self, computation_graph_args, sample_trajectory_args, estimate_return_args):
         super(Agent, self).__init__()
         self.ob_dim = computation_graph_args['ob_dim']
@@ -98,17 +99,15 @@ class Agent(object):
         # ------------------------------------------------------------------
         # START OF YOUR CODE
         # ------------------------------------------------------------------
-        sy_adv_n = tf.placeholder(shape=None, name="adv", dtype=tf.float32)
-        if self.normalize_advantages:
-            sy_adv_n = tf.keras.utils.normalize(sy_adv_n, axis=-1, order=2)
+        sy_adv_n = tf.placeholder(shape=[None], name="adv", dtype=tf.float32)
         # ------------------------------------------------------------------
         # END OF YOUR CODE
         # ------------------------------------------------------------------
         return sy_ob_no, sy_ac_na, sy_adv_n
 
-    # ========================================================================================#
+    # ======================================================================================== #
     #                           ----------PROBLEM 1----------
-    # ========================================================================================#
+    # ======================================================================================== #
     def policy_forward_pass(self, sy_ob_no):
         """
         Constructs the symbolic operation for the policy network outputs,
@@ -139,7 +138,7 @@ class Agent(object):
             # ------------------------------------------------------------------
             # START OF YOUR CODE
             # ------------------------------------------------------------------
-            sy_logits_na = build_mlp(sy_ob_no, self.ac_dim, "scope", self.n_layers, self.size)
+            sy_logits_na = build_mlp(sy_ob_no, self.ac_dim, "scope", self.n_layers, self.size, output_activation=tf.nn.softmax)
             # ------------------------------------------------------------------
             # END OF YOUR CODE
             # ------------------------------------------------------------------
@@ -149,7 +148,7 @@ class Agent(object):
             # START OF YOUR CODE
             # ------------------------------------------------------------------
             sy_mean = build_mlp(sy_ob_no, self.ac_dim, "scope", self.n_layers, self.size)
-            sy_logstd = tf.Variable(np.random.rand((self.ac_dim, )), dtype=tf.float32)
+            sy_logstd = tf.get_variable(shape=[self.ac_dim], dtype=tf.float32, name='logstd')
             # ------------------------------------------------------------------
             # END OF YOUR CODE
             # ------------------------------------------------------------------
@@ -188,7 +187,7 @@ class Agent(object):
             # ------------------------------------------------------------------
             # START OF YOUR CODE
             # ------------------------------------------------------------------
-            sy_sampled_ac = tfd.Categorical(logits=sy_logits_na)
+            sy_sampled_ac = tfd.Categorical(logits=sy_logits_na).sample(sample_shape=1)
             # ------------------------------------------------------------------
             # END OF YOUR CODE
             # ------------------------------------------------------------------
@@ -197,7 +196,7 @@ class Agent(object):
             # ------------------------------------------------------------------
             # START OF YOUR CODE
             # ------------------------------------------------------------------
-            sy_sampled_ac = tfd.MultivariateNormalLinearOperator(loc=sy_mean, scale=sy_logstd)
+            sy_sampled_ac = tfd.Normal(loc=sy_mean, scale=sy_logstd).sample(sample_shape=1)
             # ------------------------------------------------------------------
             # END OF YOUR CODE
             # ------------------------------------------------------------------
@@ -244,7 +243,7 @@ class Agent(object):
             # ------------------------------------------------------------------
             # START OF YOUR CODE
             # ------------------------------------------------------------------
-            sy_logprob_n = tfd.MultivariateNormalLinearOperator(loc=sy_mean, scale=sy_logstd).log_prob(sy_ac_na)
+            sy_logprob_n = tfd.Normal(loc=sy_mean, scale=sy_logstd).log_prob(sy_ac_na)
             # ------------------------------------------------------------------
             # END OF YOUR CODE
             # ------------------------------------------------------------------
@@ -275,21 +274,22 @@ class Agent(object):
         self.policy_parameters = self.policy_forward_pass(self.sy_ob_no)
 
         # We can sample actions from this action distribution.
-        # This will be called in Agent.sample_trajectory() where we generate a rollout.
+        # This will be called in Agent.sample_trajectory() where we generate a roll-out.
         self.sy_sampled_ac = self.sample_action(self.policy_parameters)
 
         # We can also compute the logprob of the actions that were actually taken by the policy
         # This is used in the loss function.
         self.sy_logprob_n = self.get_log_prob(self.policy_parameters, self.sy_ac_na)
 
-        # ========================================================================================#
+        # ======================================================================================== #
         #                           ----------PROBLEM 1----------
         #                        Loss Function and Training Operation
-        # ========================================================================================#
+        # ======================================================================================== #
         # ------------------------------------------------------------------
         # START OF YOUR CODE
         # ------------------------------------------------------------------
-        self.loss = tf.tensordot(self.sy_logprob_n, self.sy_adv_n)
+        # self.loss = -tf.tensordot(self.sy_logprob_n, self.sy_adv_n, axes=1)
+        self.loss = -tf.reduce_sum(self.sy_logprob_n * self.sy_adv_n)
         # ------------------------------------------------------------------
         # END OF YOUR CODE
         # ------------------------------------------------------------------
@@ -325,7 +325,7 @@ class Agent(object):
             # ------------------------------------------------------------------
             # START OF YOUR CODE
             # ------------------------------------------------------------------
-
+            ac = self.sess.run(self.sy_sampled_ac, feed_dict={self.sy_ob_no: [obs[-1]]})[0]
             # ------------------------------------------------------------------
             # END OF YOUR CODE
             # ------------------------------------------------------------------
@@ -406,7 +406,23 @@ class Agent(object):
         # ------------------------------------------------------------------
         # START OF YOUR CODE
         # ------------------------------------------------------------------
-
+        if not self.reward_to_go:
+            q_n = []
+            for path in re_n:
+                path_sum = 0.
+                for i in range(len(path)):
+                    path_sum += (self.gamma ** i) * path[i]
+                q_n.extend([path_sum] * len(path))
+            q_n = np.array(q_n)
+        else:
+            q_n = []
+            for path in re_n:
+                for i in range(len(path)):
+                    path_sum = 0.
+                    for j in range(i, len(path)):
+                        path_sum += (self.gamma ** (j - i)) * path[j]
+                    q_n.append(path_sum)
+            q_n = np.array(q_n)
         # ------------------------------------------------------------------
         # END OF YOUR CODE
         # ------------------------------------------------------------------
@@ -451,7 +467,10 @@ class Agent(object):
             # ------------------------------------------------------------------
             # START OF YOUR CODE
             # ------------------------------------------------------------------
-            pass
+            mean, stddev = np.mean(adv_n), np.std(adv_n)
+            adv_n -= mean
+            if stddev != 0:
+                adv_n /= stddev
             # ------------------------------------------------------------------
             # END OF YOUR CODE
             # ------------------------------------------------------------------
@@ -486,7 +505,7 @@ class Agent(object):
         # ------------------------------------------------------------------
         # START OF YOUR CODE
         # ------------------------------------------------------------------
-
+        self.sess.run([self.update_op], feed_dict={self.sy_ob_no: ob_no, self.sy_ac_na: ac_na, self.sy_adv_n: adv_n})
         # ------------------------------------------------------------------
         # END OF YOUR CODE
         # ------------------------------------------------------------------

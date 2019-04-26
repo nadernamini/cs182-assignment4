@@ -14,17 +14,17 @@ def atari_model(img_in, num_actions, scope, reuse=False):
         out = img_in
         with tf.variable_scope("convnet"):
             out = layers.convolution2d(out, num_outputs=32,
-                    kernel_size=8, stride=4, activation_fn=tf.nn.relu)
+                                       kernel_size=8, stride=4, activation_fn=tf.nn.relu)
             out = layers.convolution2d(out, num_outputs=64,
-                    kernel_size=4, stride=2, activation_fn=tf.nn.relu)
+                                       kernel_size=4, stride=2, activation_fn=tf.nn.relu)
             out = layers.convolution2d(out, num_outputs=64,
-                    kernel_size=3, stride=1, activation_fn=tf.nn.relu)
+                                       kernel_size=3, stride=1, activation_fn=tf.nn.relu)
         out = layers.flatten(out)
         with tf.variable_scope("action_value"):
             out = layers.fully_connected(out, num_outputs=512,
-                    activation_fn=tf.nn.relu)
+                                         activation_fn=tf.nn.relu)
             out = layers.fully_connected(out, num_outputs=num_actions,
-                    activation_fn=None)
+                                         activation_fn=None)
         return out
 
 
@@ -34,11 +34,11 @@ def cartpole_model(x_input, num_actions, scope, reuse=False):
     with tf.variable_scope(scope, reuse=reuse):
         out = x_input
         out = layers.fully_connected(out, num_outputs=32,
-                activation_fn=tf.nn.tanh)
+                                     activation_fn=tf.nn.tanh)
         out = layers.fully_connected(out, num_outputs=32,
-                activation_fn=tf.nn.tanh)
+                                     activation_fn=tf.nn.tanh)
         out = layers.fully_connected(out, num_outputs=num_actions,
-                activation_fn=None)
+                                     activation_fn=None)
         return out
 
 
@@ -50,12 +50,12 @@ def learn(env, session, args):
             kwargs=dict(epsilon=1e-4),
             lr_schedule=lr_schedule
         )
-        limit = max(int(args.num_steps/2), 2e6)
+        limit = max(int(args.num_steps / 2), 2e6)
         exploration_schedule = PiecewiseSchedule([
-                (0,     1.00),
-                (1e6,   0.10),
-                (limit, 0.01),
-            ], outside_value=0.01
+            (0, 1.00),
+            (1e6, 0.10),
+            (limit, 0.01),
+        ], outside_value=0.01
         )
         dqn.learn(
             env=env,
@@ -83,10 +83,10 @@ def learn(env, session, args):
             lr_schedule=lr_schedule
         )
         exploration_schedule = PiecewiseSchedule([
-                (0,   1.00),
-                (5e4, 0.10),
-                (1e5, 0.02),
-            ], outside_value=0.02
+            (0, 1.00),
+            (5e4, 0.10),
+            (1e5, 0.02),
+        ], outside_value=0.02
         )
         dqn.learn(
             env=env,
@@ -185,9 +185,9 @@ if __name__ == "__main__":
     if args.double_q:
         exp_name = 'double-dqn'
 
-    if not(os.path.exists('data_dqn')):
+    if not (os.path.exists('data_dqn')):
         os.makedirs('data_dqn')
-    logdir = exp_name+ '_' +args.env+ '_' +time.strftime("%d-%m-%Y_%H-%M-%S")
+    logdir = exp_name + '_' + args.env + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
     logdir = os.path.join('data_dqn', logdir)
     logz.configure_output_dir(logdir)
     args.logdir = logdir

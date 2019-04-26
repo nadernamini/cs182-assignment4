@@ -11,6 +11,7 @@ import logz
 import tensorflow as tf
 from collections import namedtuple
 from dqn_utils import *
+
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs", "lr_schedule"])
 
 
@@ -91,7 +92,7 @@ class QLearner(object):
             If True, CartPole-v0. Else, PongNoFrameskip-v4
         """
         assert type(env.observation_space) == gym.spaces.Box
-        assert type(env.action_space)      == gym.spaces.Discrete
+        assert type(env.action_space) == gym.spaces.Discrete
         self.max_steps = int(max_steps)
         self.target_update_freq = target_update_freq
         self.optimizer_spec = optimizer_spec
@@ -105,7 +106,7 @@ class QLearner(object):
         self.env = env
 
         if cartpole:
-            input_shape = self.env.observation_space.shape # should be (4,)
+            input_shape = self.env.observation_space.shape  # should be (4,)
         else:
             img_h, img_w, img_c = self.env.observation_space.shape
             input_shape = (img_h, img_w, frame_history_len * img_c)
@@ -129,21 +130,21 @@ class QLearner(object):
         # (You should not need to modify this placeholder code.)
         # ----------------------------------------------------------------------
         if cartpole:
-            self.obs_t_ph   = tf.placeholder(tf.float32, [None]+list(input_shape))
-            self.obs_tp1_ph = tf.placeholder(tf.float32, [None]+list(input_shape))
+            self.obs_t_ph = tf.placeholder(tf.float32, [None] + list(input_shape))
+            self.obs_tp1_ph = tf.placeholder(tf.float32, [None] + list(input_shape))
         else:
-            self.obs_t_ph   = tf.placeholder(tf.uint8, [None]+list(input_shape))
-            self.obs_tp1_ph = tf.placeholder(tf.uint8, [None]+list(input_shape))
-        self.act_t_ph     = tf.placeholder(tf.int32,   [None])
-        self.rew_t_ph     = tf.placeholder(tf.float32, [None])
+            self.obs_t_ph = tf.placeholder(tf.uint8, [None] + list(input_shape))
+            self.obs_tp1_ph = tf.placeholder(tf.uint8, [None] + list(input_shape))
+        self.act_t_ph = tf.placeholder(tf.int32, [None])
+        self.rew_t_ph = tf.placeholder(tf.float32, [None])
         self.done_mask_ph = tf.placeholder(tf.float32, [None])
 
         # Casting to float on GPU ensures lower data transfer times.
         if cartpole:
-            obs_t_float   = self.obs_t_ph
+            obs_t_float = self.obs_t_ph
             obs_tp1_float = self.obs_tp1_ph
         else:
-            obs_t_float   = tf.cast(self.obs_t_ph,   tf.float32) / 255.0
+            obs_t_float = tf.cast(self.obs_t_ph, tf.float32) / 255.0
             obs_tp1_float = tf.cast(self.obs_tp1_ph, tf.float32) / 255.0
 
         # ----------------------------------------------------------------------
@@ -186,13 +187,13 @@ class QLearner(object):
         # Construct optimization op (with gradient clipping).
         self.learning_rate = tf.placeholder(tf.float32, (), name="learning_rate")
         optimizer = self.optimizer_spec.constructor(learning_rate=self.learning_rate,
-                    **self.optimizer_spec.kwargs)
+                                                    **self.optimizer_spec.kwargs)
         self.train_fn = minimize_and_clip(optimizer, self.total_error,
-                     var_list=q_func_vars, clip_val=grad_norm_clipping)
+                                          var_list=q_func_vars, clip_val=grad_norm_clipping)
 
         # update_target_fn will be called periodically to copy Q network to target Q network
         update_target_fn = []
-        for var, var_target in zip(sorted(q_func_vars,        key=lambda v: v.name),
+        for var, var_target in zip(sorted(q_func_vars, key=lambda v: v.name),
                                    sorted(target_q_func_vars, key=lambda v: v.name)):
             update_target_fn.append(var_target.assign(var))
         self.update_target_fn = tf.group(*update_target_fn)
@@ -205,17 +206,16 @@ class QLearner(object):
         # Bells and whistles. Note the `self.env.reset()` call, though!
         self.model_initialized = False
         self.num_param_updates = 0
-        self.mean_episode_reward      = -float('nan')
-        self.std_episode_reward       = -float('nan')
+        self.mean_episode_reward = -float('nan')
+        self.std_episode_reward = -float('nan')
         self.best_mean_episode_reward = -float('inf')
-        if cartpole: 
+        if cartpole:
             self.log_every_n_steps = 1000
         else:
             self.log_every_n_steps = 10000
         self.start_time = time.time()
         self.last_obs = self.env.reset()
         self.t = 0
-
 
     def step_env(self):
         """Step the env and store the transition.
@@ -265,7 +265,6 @@ class QLearner(object):
         # END OF YOUR CODE
         # ----------------------------------------------------------------------
 
-
     def update_model(self):
         """Perform experience replay and train the network.
 
@@ -303,8 +302,8 @@ class QLearner(object):
         variable `self.num_param_updates` usefull; it was initialized to 0.
         """
         if (self.t > self.learning_starts and \
-            self.t % self.learning_freq == 0 and \
-            self.replay_buffer.can_sample(self.batch_size)):
+                self.t % self.learning_freq == 0 and \
+                self.replay_buffer.can_sample(self.batch_size)):
             # ------------------------------------------------------------------
             # START OF YOUR CODE
             # ------------------------------------------------------------------
@@ -315,13 +314,12 @@ class QLearner(object):
             self.num_param_updates += 1
         self.t += 1
 
-
     def log_progress(self):
         episode_rewards = get_wrapper_by_name(self.env, "Monitor").get_episode_rewards()
 
         if len(episode_rewards) > 0:
             self.mean_episode_reward = np.mean(episode_rewards[-100:])
-            self.std_episode_reward  = np.std(episode_rewards[-100:])
+            self.std_episode_reward = np.std(episode_rewards[-100:])
         if len(episode_rewards) > 100:
             self.best_mean_episode_reward = \
                 max(self.best_mean_episode_reward, self.mean_episode_reward)
@@ -329,15 +327,15 @@ class QLearner(object):
         # See the `log.txt` file for where these statistics are stored.
         if self.t % self.log_every_n_steps == 0:
             lr = self.optimizer_spec.lr_schedule.value(self.t)
-            hours = (time.time() - self.start_time) / (60.*60.)
-            logz.log_tabular("Steps",                 self.t)
+            hours = (time.time() - self.start_time) / (60. * 60.)
+            logz.log_tabular("Steps", self.t)
             logz.log_tabular("Avg_Last_100_Episodes", self.mean_episode_reward)
             logz.log_tabular("Std_Last_100_Episodes", self.std_episode_reward)
             logz.log_tabular("Best_Avg_100_Episodes", self.best_mean_episode_reward)
-            logz.log_tabular("Num_Episodes",          len(episode_rewards))
-            logz.log_tabular("Exploration_Epsilon",   self.exploration.value(self.t))
-            logz.log_tabular("Adam_Learning_Rate",    lr)
-            logz.log_tabular("Elapsed_Time_Hours",    hours)
+            logz.log_tabular("Num_Episodes", len(episode_rewards))
+            logz.log_tabular("Exploration_Epsilon", self.exploration.value(self.t))
+            logz.log_tabular("Adam_Learning_Rate", lr)
+            logz.log_tabular("Elapsed_Time_Hours", hours)
             logz.dump_tabular()
 
 
