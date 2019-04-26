@@ -8,5 +8,7 @@ target/*
 *.iml
 # Ignore all OSX hidden files
 *.DS_Store
+__pycache__/
+data_pg/
 /bin/
 .ipynb_checkpoints
