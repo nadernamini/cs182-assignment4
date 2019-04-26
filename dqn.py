@@ -62,7 +62,7 @@ class QLearner(object):
         session: tf.Session
             tensorflow session to use.
         exploration: Schedule
-            schedule for probability of chosing random action.
+            schedule for probability of choosing random action.
         replay_buffer_size: int
             How many memories to store in the replay buffer.
         batch_size: int
@@ -179,7 +179,16 @@ class QLearner(object):
         # ----------------------------------------------------------------------
         # START OF YOUR CODE
         # ----------------------------------------------------------------------
-
+        q_t = q_func(obs_t_float, self.num_actions, scope="q_func", reuse=False)
+        q_tp1 = q_func(obs_tp1_float, self.num_actions, scope="target_q_func", reuse=False)
+        q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='q_func')
+        target_q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_q_func')
+        self.best_action = tf.argmax(q_t, axis=1)
+        best_qtp1 = tf.reduce_max(q_tp1, axis=1)
+        r_t = self.rew_t_ph + (1. - self.done_mask_ph) * gamma * best_qtp1
+        act_one_hot = tf.one_hot(self.act_t_ph, self.num_actions, dtype=tf.float32)
+        x = r_t - tf.reduce_sum(q_t * act_one_hot, axis=1)
+        self.total_error = huber_loss(x)
         # ----------------------------------------------------------------------
         # END OF YOUR CODE
         # ----------------------------------------------------------------------
@@ -260,7 +269,22 @@ class QLearner(object):
         # ----------------------------------------------------------------------
         # START OF YOUR CODE
         # ----------------------------------------------------------------------
+        idx = self.replay_buffer.store_frame(self.last_obs)
 
+        if not self.model_initialized:
+            action = random.randint(0, self.num_actions - 1)
+        else:
+            obs = self.replay_buffer.encode_recent_observation()
+            action = self.session.run(self.best_action, feed_dict={self.obs_t_ph: [obs]})[0]
+            if random.random() < self.exploration.value(self.t) * self.num_actions / (self.num_actions - 1):
+                action = random.randint(0, self.num_actions - 1)
+
+        next_obs, reward, done, _ = self.env.step(action)
+        self.replay_buffer.store_effect(idx, action, reward, done)
+        if done:
+            self.last_obs = self.env.reset()
+        else:
+            self.last_obs = next_obs
         # ----------------------------------------------------------------------
         # END OF YOUR CODE
         # ----------------------------------------------------------------------
@@ -299,15 +323,44 @@ class QLearner(object):
           self.session.run(self.update_target_fn)
 
         you should update every `target_update_freq` steps, and you may find the
-        variable `self.num_param_updates` usefull; it was initialized to 0.
+        variable `self.num_param_updates` useful; it was initialized to 0.
         """
-        if (self.t > self.learning_starts and \
-                self.t % self.learning_freq == 0 and \
+        if (self.t > self.learning_starts and
+                self.t % self.learning_freq == 0 and
                 self.replay_buffer.can_sample(self.batch_size)):
             # ------------------------------------------------------------------
             # START OF YOUR CODE
             # ------------------------------------------------------------------
+            obs_batch, act_batch, rew_batch, next_obs_batch, done_batch = self.replay_buffer.sample(self.batch_size)
 
+            if not self.model_initialized:
+                g_vars, feed_dict = tf.global_variables(), {
+                    self.obs_t_ph: obs_batch,
+                    self.obs_tp1_ph: next_obs_batch,
+                }
+                while len(g_vars) > 0:
+                    g_vars_left = []
+                    for g_var in g_vars:
+                        try:
+                            self.session.run(tf.variables_initializer([g_var]), feed_dict)
+                        except tf.errors.FailedPreconditionError:
+                            g_vars_left.append(g_var)
+                    if len(g_vars_left) == len(g_vars):
+                        raise Exception("None of the variables could be initialized.")
+                    g_vars = g_vars_left
+                self.model_initialized = True
+
+            self.session.run(self.train_fn, {
+                self.obs_t_ph: obs_batch,
+                self.act_t_ph: act_batch,
+                self.rew_t_ph: rew_batch,
+                self.obs_tp1_ph: next_obs_batch,
+                self.done_mask_ph: done_batch,
+                self.learning_rate: self.optimizer_spec.lr_schedule.value(self.t)
+            })
+
+            if self.num_param_updates % self.target_update_freq == 0:
+                self.session.run(self.update_target_fn)
             # ------------------------------------------------------------------
             # END OF YOUR CODE
             # ------------------------------------------------------------------

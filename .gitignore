@@ -10,5 +10,6 @@ target/*
 *.DS_Store
 __pycache__/
 data_pg/
+data_dqn/
 /bin/
 .ipynb_checkpoints
