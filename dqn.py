@@ -269,22 +269,19 @@ class QLearner(object):
         # ----------------------------------------------------------------------
         # START OF YOUR CODE
         # ----------------------------------------------------------------------
-        idx = self.replay_buffer.store_frame(self.last_obs)
+        frame_idx = self.replay_buffer.store_frame(self.last_obs)
 
         if not self.model_initialized:
-            action = random.randint(0, self.num_actions - 1)
+            action = self.env.action_space.sample()
         else:
             obs = self.replay_buffer.encode_recent_observation()
             action = self.session.run(self.best_action, feed_dict={self.obs_t_ph: [obs]})[0]
-            if random.random() < self.exploration.value(self.t) * self.num_actions / (self.num_actions - 1):
-                action = random.randint(0, self.num_actions - 1)
+            if random.random() < self.exploration.value(self.t):
+                action = self.env.action_space.sample()
 
-        next_obs, reward, done, _ = self.env.step(action)
-        self.replay_buffer.store_effect(idx, action, reward, done)
-        if done:
-            self.last_obs = self.env.reset()
-        else:
-            self.last_obs = next_obs
+        obs, reward, done, _ = self.env.step(action)
+        self.replay_buffer.store_effect(frame_idx, action, reward, done)
+        self.last_obs = self.env.reset() if done else obs
         # ----------------------------------------------------------------------
         # END OF YOUR CODE
         # ----------------------------------------------------------------------
@@ -348,6 +345,7 @@ class QLearner(object):
                     if len(g_vars_left) == len(g_vars):
                         raise Exception("None of the variables could be initialized.")
                     g_vars = g_vars_left
+                self.session.run(self.update_target_fn)
                 self.model_initialized = True
 
             self.session.run(self.train_fn, {
