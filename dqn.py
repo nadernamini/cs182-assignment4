@@ -184,7 +184,8 @@ class QLearner(object):
         q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='q_func')
         target_q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_q_func')
         self.best_action = tf.argmax(q_t, axis=1)
-        best_qtp1 = tf.reduce_max(q_tp1, axis=1)
+        best_qtp1 = tf.reduce_sum(q_tp1 * tf.one_hot(self.best_action, self.num_actions, dtype=tf.float32), axis=1) if\
+            self.double_q else tf.reduce_max(q_tp1, axis=1)
         r_t = self.rew_t_ph + (1. - self.done_mask_ph) * gamma * best_qtp1
         act_one_hot = tf.one_hot(self.act_t_ph, self.num_actions, dtype=tf.float32)
         x = r_t - tf.reduce_sum(q_t * act_one_hot, axis=1)
