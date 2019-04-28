@@ -138,7 +138,8 @@ class Agent(object):
             # ------------------------------------------------------------------
             # START OF YOUR CODE
             # ------------------------------------------------------------------
-            sy_logits_na = build_mlp(sy_ob_no, self.ac_dim, "scope", self.n_layers, self.size, output_activation=tf.nn.softmax)
+            sy_logits_na = build_mlp(sy_ob_no, self.ac_dim, "scope", self.n_layers, self.size, activation=tf.nn.relu,
+                                     output_activation=tf.nn.softmax)
             # ------------------------------------------------------------------
             # END OF YOUR CODE
             # ------------------------------------------------------------------
@@ -147,7 +148,7 @@ class Agent(object):
             # ------------------------------------------------------------------
             # START OF YOUR CODE
             # ------------------------------------------------------------------
-            sy_mean = build_mlp(sy_ob_no, self.ac_dim, "scope", self.n_layers, self.size)
+            sy_mean = build_mlp(sy_ob_no, self.ac_dim, "scope", self.n_layers, self.size, activation=tf.nn.relu)
             sy_logstd = tf.get_variable(shape=[self.ac_dim], dtype=tf.float32, name='logstd')
             # ------------------------------------------------------------------
             # END OF YOUR CODE
@@ -196,7 +197,7 @@ class Agent(object):
             # ------------------------------------------------------------------
             # START OF YOUR CODE
             # ------------------------------------------------------------------
-            sy_sampled_ac = tfd.Normal(loc=sy_mean, scale=sy_logstd).sample(sample_shape=1)
+            sy_sampled_ac = tfd.Normal(loc=sy_mean, scale=tf.exp(sy_logstd)).sample(sample_shape=1)
             # ------------------------------------------------------------------
             # END OF YOUR CODE
             # ------------------------------------------------------------------
@@ -288,8 +289,7 @@ class Agent(object):
         # ------------------------------------------------------------------
         # START OF YOUR CODE
         # ------------------------------------------------------------------
-        # self.loss = -tf.tensordot(self.sy_logprob_n, self.sy_adv_n, axes=1)
-        self.loss = -tf.reduce_sum(self.sy_logprob_n * self.sy_adv_n)
+        self.loss = -tf.reduce_mean(tf.multiply(self.sy_logprob_n, self.sy_adv_n))
         # ------------------------------------------------------------------
         # END OF YOUR CODE
         # ------------------------------------------------------------------
@@ -325,7 +325,7 @@ class Agent(object):
             # ------------------------------------------------------------------
             # START OF YOUR CODE
             # ------------------------------------------------------------------
-            ac = self.sess.run(self.sy_sampled_ac, feed_dict={self.sy_ob_no: [obs[-1]]})[0]
+            ac = self.sess.run(self.sy_sampled_ac, feed_dict={self.sy_ob_no: ob[None]})[0]
             # ------------------------------------------------------------------
             # END OF YOUR CODE
             # ------------------------------------------------------------------
