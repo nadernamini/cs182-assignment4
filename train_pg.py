@@ -138,8 +138,7 @@ class Agent(object):
             # ------------------------------------------------------------------
             # START OF YOUR CODE
             # ------------------------------------------------------------------
-            sy_logits_na = build_mlp(sy_ob_no, self.ac_dim, "scope", self.n_layers, self.size, activation=tf.nn.relu,
-                                     output_activation=tf.nn.softmax)
+            sy_logits_na = build_mlp(sy_ob_no, self.ac_dim, "scope", self.n_layers, self.size, activation=tf.nn.relu)
             # ------------------------------------------------------------------
             # END OF YOUR CODE
             # ------------------------------------------------------------------
@@ -149,7 +148,7 @@ class Agent(object):
             # START OF YOUR CODE
             # ------------------------------------------------------------------
             sy_mean = build_mlp(sy_ob_no, self.ac_dim, "scope", self.n_layers, self.size, activation=tf.nn.relu)
-            sy_logstd = tf.get_variable(shape=[self.ac_dim], dtype=tf.float32, name='logstd')
+            sy_logstd = tf.get_variable(shape=[1, self.ac_dim], dtype=tf.float32, name='logstd')
             # ------------------------------------------------------------------
             # END OF YOUR CODE
             # ------------------------------------------------------------------
@@ -188,7 +187,7 @@ class Agent(object):
             # ------------------------------------------------------------------
             # START OF YOUR CODE
             # ------------------------------------------------------------------
-            sy_sampled_ac = tfd.Categorical(logits=sy_logits_na).sample(sample_shape=1)
+            sy_sampled_ac = tf.reshape(tf.multinomial(sy_logits_na, 1), [-1])
             # ------------------------------------------------------------------
             # END OF YOUR CODE
             # ------------------------------------------------------------------
@@ -197,7 +196,7 @@ class Agent(object):
             # ------------------------------------------------------------------
             # START OF YOUR CODE
             # ------------------------------------------------------------------
-            sy_sampled_ac = tfd.Normal(loc=sy_mean, scale=tf.exp(sy_logstd)).sample(sample_shape=1)
+            sy_sampled_ac = sy_mean + tf.exp(sy_logstd) * tf.random_normal(tf.shape(sy_mean))
             # ------------------------------------------------------------------
             # END OF YOUR CODE
             # ------------------------------------------------------------------
@@ -235,7 +234,7 @@ class Agent(object):
             # ------------------------------------------------------------------
             # START OF YOUR CODE
             # ------------------------------------------------------------------
-            sy_logprob_n = tfd.Categorical(logits=sy_logits_na).log_prob(sy_ac_na)
+            sy_logprob_n = -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.sy_ac_na, logits=sy_logits_na)
             # ------------------------------------------------------------------
             # END OF YOUR CODE
             # ------------------------------------------------------------------
@@ -244,7 +243,7 @@ class Agent(object):
             # ------------------------------------------------------------------
             # START OF YOUR CODE
             # ------------------------------------------------------------------
-            sy_logprob_n = tfd.Normal(loc=sy_mean, scale=sy_logstd).log_prob(sy_ac_na)
+            sy_logprob_n = -0.5 * tf.reduce_sum(tf.square((self.sy_ac_na - sy_mean) / tf.exp(sy_logstd)), axis=1)
             # ------------------------------------------------------------------
             # END OF YOUR CODE
             # ------------------------------------------------------------------
@@ -289,7 +288,7 @@ class Agent(object):
         # ------------------------------------------------------------------
         # START OF YOUR CODE
         # ------------------------------------------------------------------
-        self.loss = -tf.reduce_mean(tf.multiply(self.sy_logprob_n, self.sy_adv_n))
+        self.loss = -tf.reduce_mean(self.sy_logprob_n * self.sy_adv_n)
         # ------------------------------------------------------------------
         # END OF YOUR CODE
         # ------------------------------------------------------------------
@@ -325,7 +324,7 @@ class Agent(object):
             # ------------------------------------------------------------------
             # START OF YOUR CODE
             # ------------------------------------------------------------------
-            ac = self.sess.run(self.sy_sampled_ac, feed_dict={self.sy_ob_no: ob[None]})[0]
+            ac = self.sess.run(self.sy_sampled_ac, feed_dict={self.sy_ob_no: ob[None]})
             # ------------------------------------------------------------------
             # END OF YOUR CODE
             # ------------------------------------------------------------------
